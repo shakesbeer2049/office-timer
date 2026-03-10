@@ -1,6 +1,53 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+
+const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
+
+// ── Lottie cat animations ──────────────────────────────────────────
+const LOTTIE_SLEEPING = "https://assets-v2.lottiefiles.com/a/2bcc1228-1172-11ee-82dc-13c870312ce6/Cajk5zGZWZ.json";
+const LOTTIE_RUNNING  = "https://assets-v2.lottiefiles.com/a/ef825134-1161-11ee-b090-d3dc76d9aabe/5nhWGQPtGL.json";
+const LOTTIE_HAPPY    = "https://assets-v2.lottiefiles.com/a/ec6069a0-1152-11ee-94c0-d37a087ace75/a4ZCTlkC9e.json";
+
+function CatLottie({ isPunchedIn, pct, isCompleted }: { isPunchedIn: boolean; pct: number; isCompleted: boolean }) {
+  const [anims, setAnims] = useState<{ sleeping?: object; running?: object; happy?: object }>({});
+
+  useEffect(() => {
+    Promise.all([
+      fetch(LOTTIE_SLEEPING).then((r) => r.json()),
+      fetch(LOTTIE_RUNNING).then((r) => r.json()),
+      fetch(LOTTIE_HAPPY).then((r) => r.json()),
+    ]).then(([sleeping, running, happy]) => setAnims({ sleeping, running, happy }));
+  }, []);
+
+  const data = isCompleted || !isPunchedIn
+    ? anims.sleeping
+    : pct >= 50
+    ? anims.happy
+    : anims.running;
+
+  const label = isCompleted || !isPunchedIn
+    ? "resting…"
+    : pct >= 50
+    ? "almost there!"
+    : "on the grind!";
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="w-36 h-36">
+        {data ? (
+          <Lottie animationData={data} loop autoplay style={{ width: "100%", height: "100%" }} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+      <span className="text-xs text-zinc-500 -mt-2 italic">{label}</span>
+    </div>
+  );
+}
 
 // ── Storage keys ───────────────────────────────────────────────────
 const STORAGE_USER = "punch_user";
@@ -64,7 +111,7 @@ function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 function sendNotif(title: string, body: string) {
   if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/favicon.ico" });
+    new Notification(title, { body, icon: "/timer_icon.png" });
   }
 }
 
@@ -122,41 +169,6 @@ function AnimatedProgressBar({
 
   return (
     <div className="relative">
-      {/* Mario / cat */}
-      <div className="h-10 relative">
-        <div
-          className="absolute bottom-0 transition-[left] duration-1000 ease-in-out select-none z-10"
-          style={{ left: `${clampedPct}%`, transform: "translateX(-50%)" }}
-        >
-          {isCompleted ? (
-            <div className="relative">
-              <span className="animate-cat-breathe text-2xl inline-block">😺</span>
-              <span className="animate-zzz-1 absolute text-blue-300 font-bold" style={{ right: "-10px", top: "-2px", fontSize: "10px" }}>z</span>
-              <span className="animate-zzz-2 absolute text-blue-300 font-bold" style={{ right: "-16px", top: "-10px", fontSize: "13px" }}>z</span>
-              <span className="animate-zzz-3 absolute text-blue-300 font-bold" style={{ right: "-22px", top: "-20px", fontSize: "16px" }}>Z</span>
-            </div>
-          ) : isPunchedIn ? (
-            <span className="animate-mario-run text-2xl">🏃</span>
-          ) : (
-            <span className="text-2xl">🚶</span>
-          )}
-        </div>
-        <div className="absolute bottom-0 right-0 text-xl select-none opacity-70">🏁</div>
-      </div>
-
-      {/* Checkpoint icons */}
-      <div className="relative h-6">
-        {CHECKPOINTS.map((cp) => (
-          <div key={cp.pct} className="absolute bottom-0 select-none transition-all duration-500" style={{ left: `${cp.pct}%`, transform: "translateX(-50%)" }}>
-            {pct >= cp.pct ? (
-              <span className="text-base inline-block" style={{ animation: "mario-run 0.6s ease-in-out infinite", filter: "drop-shadow(0 0 4px gold)" }}>{cp.collected}</span>
-            ) : (
-              <span className="text-base opacity-30">{cp.icon}</span>
-            )}
-          </div>
-        ))}
-      </div>
-
       {/* Track */}
       <div className="relative">
         <div className="h-3 bg-zinc-800 rounded-full overflow-hidden relative">
@@ -595,14 +607,31 @@ export default function PunchApp() {
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4 pb-8">
         {/* Status Card */}
         <div className="bg-zinc-900 rounded-2xl p-4 sm:p-6 border border-zinc-800">
-          {/* Live Clock */}
+          {/* Big countdown / status display */}
           <div className="text-center mb-6">
-            <div className="text-4xl sm:text-5xl font-mono font-bold tracking-tight text-white tabular-nums">
-              {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })}
+            <div className={`text-4xl sm:text-5xl font-mono font-bold tracking-tight tabular-nums ${isCompleted ? "text-green-400" : isPunchedIn && remaining === 0 ? "text-green-400" : isPunchedIn ? "text-white" : "text-zinc-500"}`}>
+              {isCompleted
+                ? "Done 🎉"
+                : isPunchedIn
+                ? (() => {
+                    const h = Math.floor(remaining / 3600000);
+                    const m = Math.floor((remaining % 3600000) / 60000);
+                    const s = Math.floor((remaining % 60000) / 1000);
+                    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+                  })()
+                : now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })}
+            </div>
+            <div className="text-xs text-zinc-500 mt-1">
+              {isCompleted ? "Session complete" : isPunchedIn ? "remaining" : now.toLocaleDateString([], { weekday: "short", hour: "numeric", minute: "2-digit", hour12: true })}
             </div>
             <div className={`text-xs font-medium mt-2 px-3 py-1 rounded-full inline-block ${isCompleted ? "bg-green-500/20 text-green-400" : isPunchedIn ? "bg-blue-500/20 text-blue-400" : "bg-zinc-800 text-zinc-400"}`}>
               {isCompleted ? "Session Complete" : isPunchedIn ? "Currently Working" : "Not Punched In"}
             </div>
+          </div>
+
+          {/* Cat animation */}
+          <div className="flex justify-center mb-4">
+            <CatLottie isPunchedIn={isPunchedIn} pct={pct} isCompleted={isCompleted} />
           </div>
 
           {/* Progress bar + stats */}
