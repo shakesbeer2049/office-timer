@@ -24,3 +24,48 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes shimmer {
+  0% { transform: translateX(-200%) skewX(-20deg); }
+  100% { transform: translateX(300%) skewX(-20deg); }
+}
+
+@keyframes mario-run {
+  0%, 100% { transform: translateY(0px) scaleX(1); }
+  25% { transform: translateY(-6px) scaleX(1.05); }
+  50% { transform: translateY(-8px) scaleX(1); }
+  75% { transform: translateY(-3px) scaleX(0.98); }
+}
+
+@keyframes zzz-1 {
+  0%, 100% { opacity: 0.2; transform: translate(0, 0) scale(0.8); }
+  33% { opacity: 1; transform: translate(2px, -4px) scale(1); }
+}
+@keyframes zzz-2 {
+  0%, 100% { opacity: 0.2; transform: translate(0, 0) scale(0.9); }
+  66% { opacity: 1; transform: translate(4px, -8px) scale(1.1); }
+}
+@keyframes zzz-3 {
+  0%, 33% { opacity: 0.2; transform: translate(0, 0) scale(1); }
+  100% { opacity: 1; transform: translate(6px, -13px) scale(1.3); }
+}
+
+@keyframes cat-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.92); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+.animate-mario-run {
+  animation: mario-run 0.45s ease-in-out infinite;
+  display: inline-block;
+}
+.animate-cat-breathe {
+  animation: cat-breathe 3s ease-in-out infinite;
+  display: inline-block;
+}
+.animate-zzz-1 { animation: zzz-1 2s ease-in-out infinite; }
+.animate-zzz-2 { animation: zzz-2 2s ease-in-out 0.5s infinite; }
+.animate-zzz-3 { animation: zzz-3 2s ease-in-out 1s infinite; }
