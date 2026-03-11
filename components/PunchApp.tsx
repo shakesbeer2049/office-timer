@@ -430,7 +430,8 @@ export default function PunchApp() {
     const [h, m] = t.split(":").map(Number);
     const d = new Date();
     d.setHours(h, m, 0, 0);
-    return d.toISOString();
+    // Never allow a future punch-in time
+    return d.getTime() > Date.now() ? new Date().toISOString() : d.toISOString();
   };
 
   const doPunchIn = (customTimeStr?: string) => {
@@ -493,7 +494,7 @@ export default function PunchApp() {
     const current = todayRecord.punchOut
       ? new Date(todayRecord.punchOut).getTime()
       : now.getTime();
-    const elapsed = current - start;
+    const elapsed = Math.max(0, current - start);
     const total = user.workHours * 3600000;
     return {
       pct: Math.min(100, (elapsed / total) * 100),
@@ -1165,9 +1166,15 @@ export default function PunchApp() {
               <input
                 type="time"
                 value={customTime}
+                max={`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`}
                 onChange={(e) => setCustomTime(e.target.value)}
                 className="w-full bg-zinc-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 text-lg font-mono"
               />
+              {customTime > `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` && (
+                <p className="text-xs text-yellow-400">
+                  ⚠ Future time — will be set to now on confirm.
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => doPunchIn(customTime)}
@@ -1218,9 +1225,15 @@ export default function PunchApp() {
               <input
                 type="time"
                 value={customTime}
+                max={`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`}
                 onChange={(e) => setCustomTime(e.target.value)}
                 className="w-full bg-zinc-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 text-lg font-mono"
               />
+              {customTime > `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` && (
+                <p className="text-xs text-yellow-400">
+                  ⚠ Future time — will be set to now on confirm.
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => doEditPunchIn(customTime)}
