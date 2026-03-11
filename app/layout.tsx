@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Punch Timer",
+  title: "Timebox",
   description: "Track your office work hours",
   icons: {
     icon: "/timer_icon.png",

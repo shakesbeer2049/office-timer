@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-
 const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
+const Quote = dynamic(() => import("./Quote"), { ssr: false });
 
 // ── Local lottie cat files grouped by state ────────────────────────
 const CATS_SLEEPING = ["/lottie/sleeping.json"];
@@ -41,16 +41,20 @@ function CatLottie({
     setAnimData(null);
     fetch(url)
       .then((r) => r.json())
-      .then(setAnimData);
+      .then((data) => {
+        // Strip solid white background layers baked into some animations
+        if (data?.layers) {
+          data.layers = data.layers.filter(
+            (l: { ty: number; sc?: string }) =>
+              !(l.ty === 1 && l.sc?.toLowerCase() === "#ffffff"),
+          );
+        }
+        setAnimData(data);
+      })
+      .catch(() => {
+        loadedUrlRef.current = ""; // allow retry on next render
+      });
   }, [url]);
-
-  const label = isCompleted
-    ? "go rest! 😴"
-    : !isPunchedIn
-      ? "resting…"
-      : pct >= 50
-        ? "almost there!"
-        : "on the grind!";
 
   return (
     <div className="flex flex-col items-center">
@@ -68,7 +72,9 @@ function CatLottie({
           </div>
         )}
       </div>
-      <span className="text-xs text-zinc-500 -mt-2 italic">{label}</span>
+      <div className="mt-2 text-xs text-zinc-500 text-center italic px-4">
+        {<Quote />}
+      </div>
     </div>
   );
 }
@@ -86,6 +92,7 @@ interface PunchRecord {
   punchIn: string;
   punchOut: string | null;
   customEntry: boolean;
+  workHours?: number;
 }
 interface User {
   name: string;
@@ -93,6 +100,7 @@ interface User {
 }
 interface Settings {
   notificationsEnabled: boolean;
+  punchInReminderTime: string;
   geofenceEnabled: boolean;
   geofenceLat: number | null;
   geofenceLng: number | null;
@@ -101,6 +109,7 @@ interface Settings {
 
 const DEFAULT_SETTINGS: Settings = {
   notificationsEnabled: true,
+  punchInReminderTime: "10:00",
   geofenceEnabled: false,
   geofenceLat: 28.49685,
   geofenceLng: 77.15953,
@@ -160,71 +169,6 @@ function sendNotif(title: string, body: string) {
   ) {
     new Notification(title, { body, icon: "/timer_icon.png" });
   }
-}
-
-// ── Motivating sayings ─────────────────────────────────────────────
-const SAYINGS: Array<{ max: number; messages: string[] }> = [
-  {
-    max: 5,
-    messages: [
-      "Clock in, zone in. Let's go! ⚡",
-      "Every great day starts with step one. 🚀",
-      "The grind begins — you got this! 💪",
-    ],
-  },
-  {
-    max: 25,
-    messages: [
-      "Warming up nicely! Morning momentum loading… ☕",
-      "Off to a solid start, keep rolling! 🔥",
-      "Deep work mode: activated 🎯",
-    ],
-  },
-  {
-    max: 50,
-    messages: [
-      "Quarter done — you're in the zone! 🔥",
-      "Building up steam, nothing can stop you now 💪",
-      "25% in the bag, the rhythm is real 🎯",
-    ],
-  },
-  {
-    max: 75,
-    messages: [
-      "HALFWAY! Absolutely crushing it 🏆",
-      "Over the hump — all downhill from here ⬇️",
-      "50% done. The second half is yours 💥",
-    ],
-  },
-  {
-    max: 90,
-    messages: [
-      "Three quarters done! Almost there 💪",
-      "Final stretch approaching — keep the pace! 🔥",
-      "75% in. Legendary pace 🌟",
-    ],
-  },
-  {
-    max: 100,
-    messages: [
-      "Final stretch! You can taste the finish 🏃",
-      "Almost there — don't stop now! 💨",
-      "So close! One last push! 🔥",
-    ],
-  },
-  {
-    max: Infinity,
-    messages: [
-      "Full day DONE! Absolute legend 🏆",
-      "Conquered! Punch out and rest up 😎",
-      "Day complete — you earned every second 🎉",
-    ],
-  },
-];
-function getMotivation(pct: number): string {
-  const bucket =
-    SAYINGS.find((b) => pct < b.max) ?? SAYINGS[SAYINGS.length - 1];
-  return bucket.messages[new Date().getDate() % bucket.messages.length];
 }
 
 // ── Toggle switch ──────────────────────────────────────────────────
@@ -321,20 +265,26 @@ function AnimatedProgressBar({
 export default function PunchApp() {
   const [user, setUser] = useState<User | null>(() => {
     if (typeof window === "undefined") return null;
-    const u = localStorage.getItem(STORAGE_USER);
-    return u ? (JSON.parse(u) as User) : null;
+    try {
+      const u = localStorage.getItem(STORAGE_USER);
+      return u ? (JSON.parse(u) as User) : null;
+    } catch { return null; }
   });
   const [records, setRecords] = useState<PunchRecord[]>(() => {
     if (typeof window === "undefined") return [];
-    const r = localStorage.getItem(STORAGE_RECORDS);
-    return r ? (JSON.parse(r) as PunchRecord[]) : [];
+    try {
+      const r = localStorage.getItem(STORAGE_RECORDS);
+      return r ? (JSON.parse(r) as PunchRecord[]) : [];
+    } catch { return []; }
   });
   const [settings, setSettings] = useState<Settings>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
-    const s = localStorage.getItem(STORAGE_SETTINGS);
-    return s
-      ? { ...DEFAULT_SETTINGS, ...(JSON.parse(s) as Partial<Settings>) }
-      : DEFAULT_SETTINGS;
+    try {
+      const s = localStorage.getItem(STORAGE_SETTINGS);
+      return s
+        ? { ...DEFAULT_SETTINGS, ...(JSON.parse(s) as Partial<Settings>) }
+        : DEFAULT_SETTINGS;
+    } catch { return DEFAULT_SETTINGS; }
   });
   const [now, setNow] = useState(new Date());
   const [nameInput, setNameInput] = useState("");
@@ -346,6 +296,10 @@ export default function PunchApp() {
   const [editingPunchIn, setEditingPunchIn] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameEditInput, setNameEditInput] = useState("");
+  const [editingHours, setEditingHours] = useState(false);
+  const [hoursEditInput, setHoursEditInput] = useState("");
   const [notifPermission, setNotifPermission] = useState("default");
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -489,6 +443,7 @@ export default function PunchApp() {
       punchIn: punchInIso,
       punchOut: null,
       customEntry: !!customTimeStr,
+      workHours: user?.workHours ?? DEFAULT_WORK_HOURS,
     };
     saveRecords([...records.filter((r) => r.date !== today), newRecord]);
     setCustomMode(false);
@@ -570,6 +525,7 @@ export default function PunchApp() {
   useEffect(() => {
     if (!user || isPunchedIn || isCompleted || !settings.notificationsEnabled)
       return;
+    const [rh, rm] = settings.punchInReminderTime.split(":").map(Number);
     const h = now.getHours(),
       mins = now.getMinutes(),
       day = now.getDay();
@@ -577,15 +533,15 @@ export default function PunchApp() {
     if (
       day >= 1 &&
       day <= 5 &&
-      h >= 9 &&
-      h < 10 &&
-      mins < 5 &&
+      h === rh &&
+      mins >= rm &&
+      mins < rm + 5 &&
       !localStorage.getItem(key)
     ) {
       localStorage.setItem(key, "1");
       sendNotif(
         "⏰ Don't forget to punch in!",
-        `Good morning, ${user.name}! You haven't punched in yet.`,
+        `Hey ${user.name}, you haven't punched in yet!`,
       );
     }
   }, [
@@ -595,6 +551,7 @@ export default function PunchApp() {
     isCompleted,
     today,
     settings.notificationsEnabled,
+    settings.punchInReminderTime,
   ]);
 
   const pastRecords = records
@@ -761,12 +718,38 @@ export default function PunchApp() {
                   ⚠ Blocked by browser — enable in system settings.
                 </p>
               )}
-              {notifPermission === "granted" &&
-                settings.notificationsEnabled && (
-                  <p className="text-xs text-green-400 mt-2">
-                    ✓ Notifications are active
-                  </p>
-                )}
+              {settings.notificationsEnabled && notifPermission === "granted" && (
+                <div className="mt-3 space-y-2 border-t border-zinc-700 pt-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-zinc-300">Punch-in reminder</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Weekdays only, if not punched in
+                      </p>
+                    </div>
+                    <input
+                      type="time"
+                      value={settings.punchInReminderTime}
+                      onChange={(e) =>
+                        saveSettings({
+                          ...settings,
+                          punchInReminderTime: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-700 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-zinc-300">Work day complete alert</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Notifies when you hit your work hours
+                      </p>
+                    </div>
+                    <span className="text-xs text-green-400 font-medium">✓ On</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -881,14 +864,112 @@ export default function PunchApp() {
             <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
               Account
             </p>
-            <div className="bg-zinc-800 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-white">{user.name}</p>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    {user.workHours}h work day
-                  </p>
+            <div className="bg-zinc-800 rounded-2xl p-4 space-y-3">
+              {editingName ? (
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={nameEditInput}
+                    onChange={(e) => setNameEditInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const n = nameEditInput.trim();
+                        if (n) saveUser({ ...user, name: n });
+                        setEditingName(false);
+                      }
+                      if (e.key === "Escape") setEditingName(false);
+                    }}
+                    className="flex-1 bg-zinc-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Your name"
+                  />
+                  <button
+                    onClick={() => {
+                      const n = nameEditInput.trim();
+                      if (n) saveUser({ ...user, name: n });
+                      setEditingName(false);
+                    }}
+                    className="text-xs text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingName(false)}
+                    className="text-xs text-zinc-400 bg-zinc-700 hover:bg-zinc-600 px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">{user.name}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {user.workHours}h work day
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setNameEditInput(user.name);
+                        setEditingName(true);
+                      }}
+                      className="text-xs text-zinc-400 hover:text-white bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Edit name
+                    </button>
+                    <button
+                      onClick={() => {
+                        setHoursEditInput(String(user.workHours));
+                        setEditingHours(true);
+                      }}
+                      className="text-xs text-zinc-400 hover:text-white bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Edit hours
+                    </button>
+                  </div>
+                </div>
+              )}
+              {editingHours && (
+                <div className="flex gap-2 items-center">
+                  <input
+                    autoFocus
+                    type="number"
+                    min="1"
+                    max="24"
+                    step="0.5"
+                    value={hoursEditInput}
+                    onChange={(e) => setHoursEditInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const h = parseFloat(hoursEditInput);
+                        if (h > 0) saveUser({ ...user, workHours: h });
+                        setEditingHours(false);
+                      }
+                      if (e.key === "Escape") setEditingHours(false);
+                    }}
+                    className="flex-1 bg-zinc-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Work hours"
+                  />
+                  <button
+                    onClick={() => {
+                      const h = parseFloat(hoursEditInput);
+                      if (h > 0) saveUser({ ...user, workHours: h });
+                      setEditingHours(false);
+                    }}
+                    className="text-xs text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingHours(false)}
+                    className="text-xs text-zinc-400 bg-zinc-700 hover:bg-zinc-600 px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <div className="border-t border-zinc-700 pt-3">
                 <button
                   onClick={() => {
                     setShowSettings(false);
@@ -907,7 +988,7 @@ export default function PunchApp() {
       {/* Header */}
       <header className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between max-w-2xl mx-auto">
         <div>
-          <h1 className="font-bold text-base">⏱ Punch Timer</h1>
+          <h1 className="font-bold text-base">⏱ Timebox</h1>
           <p className="text-zinc-500 text-xs mt-0.5">{fmtDate(today)}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -1035,14 +1116,8 @@ export default function PunchApp() {
                 punchInIso={todayRecord.punchIn}
                 workHours={user.workHours}
               />
-              {(isPunchedIn || isCompleted) && (
-                <div className="mt-1 mb-3 text-center">
-                  <span className="text-xs text-zinc-400 italic">
-                    {getMotivation(pct)}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between text-xs mt-1">
+
+              <div className="flex justify-between text-xs mt-4">
                 <span className="text-zinc-600">
                   {Math.round(pct)}% complete
                 </span>
@@ -1216,7 +1291,7 @@ export default function PunchApp() {
                       new Date(r.punchIn).getTime()
                     : null;
                   const dayPct = dur
-                    ? Math.min(100, (dur / (user.workHours * 3600000)) * 100)
+                    ? Math.min(100, (dur / ((r.workHours ?? user.workHours) * 3600000)) * 100)
                     : 0;
                   return (
                     <div key={r.id} className="px-5 py-4">
