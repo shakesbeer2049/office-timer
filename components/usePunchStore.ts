@@ -19,31 +19,27 @@ import {
 } from "./utils";
 
 export function usePunchStore() {
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window === "undefined") return null;
+  const [user, setUser] = useState<User | null>(null);
+  const [records, setRecords] = useState<PunchRecord[]>([]);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Defer localStorage reads to after hydration to avoid SSR mismatch
+  useEffect(() => {
     try {
       const u = localStorage.getItem(STORAGE_USER);
-      return u ? (JSON.parse(u) as User) : null;
-    } catch { return null; }
-  });
-
-  const [records, setRecords] = useState<PunchRecord[]>(() => {
-    if (typeof window === "undefined") return [];
+      if (u) setUser(JSON.parse(u) as User);
+    } catch { /* ignore */ }
     try {
       const r = localStorage.getItem(STORAGE_RECORDS);
-      return r ? (JSON.parse(r) as PunchRecord[]) : [];
-    } catch { return []; }
-  });
-
-  const [settings, setSettings] = useState<Settings>(() => {
-    if (typeof window === "undefined") return DEFAULT_SETTINGS;
+      if (r) setRecords(JSON.parse(r) as PunchRecord[]);
+    } catch { /* ignore */ }
     try {
       const s = localStorage.getItem(STORAGE_SETTINGS);
-      return s
-        ? { ...DEFAULT_SETTINGS, ...(JSON.parse(s) as Partial<Settings>) }
-        : DEFAULT_SETTINGS;
-    } catch { return DEFAULT_SETTINGS; }
-  });
+      if (s) setSettings({ ...DEFAULT_SETTINGS, ...(JSON.parse(s) as Partial<Settings>) });
+    } catch { /* ignore */ }
+    setHydrated(true);
+  }, []);
 
   const [now, setNow] = useState(new Date());
   const [nameInput, setNameInput] = useState("");
@@ -291,7 +287,7 @@ export function usePunchStore() {
 
   return {
     // state
-    user, settings, now,
+    hydrated, user, settings, now,
     nameInput, setNameInput,
     workHoursInput, setWorkHoursInput,
     customMode, setCustomMode,

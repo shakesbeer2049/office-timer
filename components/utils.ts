@@ -54,6 +54,10 @@ export function sendNotif(title: string, body: string) {
     "Notification" in window &&
     Notification.permission === "granted"
   ) {
-    new Notification(title, { body, icon: "/timer_icon.png" });
+    try {
+      new Notification(title, { body, icon: "/timer_icon.png" });
+    } catch {
+      // Some browsers (e.g. iOS Safari) claim granted but throw on instantiation
+    }
   }
 }

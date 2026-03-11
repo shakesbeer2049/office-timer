@@ -10,7 +10,7 @@ import HistoryList from "./HistoryList";
 export default function PunchApp() {
   const store = usePunchStore();
   const {
-    user, settings, now,
+    hydrated, user, settings, now,
     nameInput, setNameInput, workHoursInput, setWorkHoursInput,
     customMode, setCustomMode, customTime, setCustomTime,
     editingPunchIn, setEditingPunchIn,
@@ -26,6 +26,14 @@ export default function PunchApp() {
   } = store;
 
   const nowMaxTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <div className="w-6 h-6 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   // ── Login screen ───────────────────────────────────────────────
   if (!user) {
